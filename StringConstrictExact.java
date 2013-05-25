@@ -18,6 +18,8 @@ public class StringConstrictExact
     String [] instances;
     
     HashMap <String, int[]> index_mappings;
+    
+    int max = 0;
 
     public StringConstrictExact(Set <Character> variables, Set <String> sets, HashMap <String, Integer> costs) 
     {
@@ -78,114 +80,102 @@ public class StringConstrictExact
         return instances;
     }
 
-    public int constrain()
+    public void constrain()
     {
-        int max = 0;
-
         boolean [] curr = new boolean[instances.length];
         curr[0] = true;
         
-
+        Set [] currValues = new Set [costs.size() - variables.size()];
+        
+        for(int i = 0; i < costs.size() - variables.size(); i++) {
+            currValues[i] = new HashSet <String> ((int)(instances.length / 0.75) + 1);
+        }
+        
+        constrainHelper(curr, 1, currValues);
+    }
+    
+    public void constrainHelper(boolean [] current, int size, Set [] currValues)
+    {
         Stack <boolean []> currInstances = new Stack();
+        ArrayList <Object []> additions = null;
         
-        currInstances.push(curr);
-        getCount(curr);
-        
-
-        while(!currInstances.isEmpty())
+        for(int i = 1; i < instances.length; i++)
         {
-            boolean [] inner_curr = currInstances.pop();
+            if(current[i]) {
+                continue;
+            }
 
-            for(int i = 1; i < instances.length; i++)
-            {
-                if(inner_curr[i]) {
-                    continue;
+            else {
+                boolean [] new_value = new boolean[instances.length];
+                System.arraycopy(current, 0, new_value, 0, instances.length);
+                new_value[i] = true;
+                
+                additions = addCount(instances[i], currValues);
+
+
+                if(!this.satisfiesConstraint(currValues)) {
+
+                    if(size > max) {
+                        max = size;
+                    }
                 }
 
                 else {
-
-                    boolean [] new_value = new boolean[instances.length];
-                    System.arraycopy(inner_curr, 0, new_value, 0, instances.length);
-                    new_value[i] = true;
-                    
-                    HashMap <String, Integer> count = getCount(new_value);
-                    
-                    
-                    if(!this.satisfiesConstraint(count)) {
-                        
-                        int size = 0;
-                        for(int j = 0; j < inner_curr.length; j++) {
-                            if(inner_curr[j]) {
-                                size++;
-                            }
-                        }
-                        
-                        if(size > max) {
-                            max = size;
-                        }
-                    }
-                    
-                    else {
-                        currInstances.push(new_value);
-                    }
+                    currInstances.push(new_value);
                 }
             }
         }
-
-        return max;
+        
+        while(!currInstances.isEmpty())
+        {
+            constrainHelper(currInstances.pop(), size + 1, currValues);
+        }
+        
+        for(int i = 0; i < additions.size() && additions != null; i++)
+        {
+            Object [] tmp = additions.get(i);
+            currValues[(Integer)tmp[0]].remove((String)tmp[1]);
+        }
     }
 
-    public boolean satisfiesConstraint(HashMap <String, Integer> count) 
+    public boolean satisfiesConstraint(Set [] currValues) 
     {   
-        for(Iterator <String> iter = sets.iterator(); iter.hasNext();)
+        int index = 0;
+        for(Iterator <String> iter = sets.iterator(); iter.hasNext(); index++)
         {
             String curr_set = iter.next();
             
-            if(count.get(curr_set) > costs.get(curr_set)) {
+            if(currValues[index].size() > costs.get(curr_set)) {
                 return false;
             }
         }
         
         return true;
     }
-
-
-    public HashMap getCount(boolean [] inst)
+    
+    private ArrayList <Object []> addCount(String inst, Set [] currValues)
     {
-        Set [] tmps = new Set [costs.size() - variables.size()];
-        HashMap <String, Integer> result = new HashMap <String, Integer> ((int)(sets.size() / 0.75) + 1);
-        
-        for(int i = 0; i < costs.size() - variables.size(); i++) {
-            tmps[i] = new HashSet <String> ((int)(instances.length / 0.75) + 1);
-        }
-        
         int index = 0;
-        String curr_set;
-        
-        for(Iterator <String> iter = sets.iterator(); iter.hasNext();)
+        ArrayList <Object []> additions = new ArrayList <Object []> ();
+        for(Iterator <String> iter = sets.iterator(); iter.hasNext(); index++)
         {
-            curr_set = iter.next();
+            String curr_set = iter.next();
             
             int [] indices = index_mappings.get(curr_set);
             
-            for(int i = 0; i < inst.length; i++)
+            String res = ""; 
+            for(int j = 0; j < indices.length; j++)
             {
-                if(!inst[i]) {
-                    continue;
-                }
-                
-                String res = ""; 
-                for(int j = 0; j < indices.length; j++)
-                {
-                    res += instances[i].charAt(indices[j]);
-                }
-                
-                tmps[index].add(res);
+                res += inst.charAt(indices[j]);
             }
-            result.put(curr_set, tmps[index].size());
-            index++;
+            
+            if(!currValues[index].contains(res)) {
+                currValues[index].add(res);
+                Object [] tmp = {index, res};
+                additions.add(tmp);
+            }
         }
-        return result;
+        return additions;
     }
     
     private void mapCharToIndex()
