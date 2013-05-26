@@ -18,6 +18,7 @@ public class StringConstrictExact
     String [] instances;
     
     HashMap <String, int[]> index_mappings;
+    HashMap [] currValues;
     
     int max = 0;
 
@@ -27,9 +28,14 @@ public class StringConstrictExact
         this.sets = sets;
         this.costs = costs;
         index_mappings = new HashMap <String, int[]> ();
+        currValues = new HashMap [costs.size() - variables.size()];
         
         generateInstances();
         mapCharToIndex();
+        
+        for(int i = 0; i < costs.size() - variables.size(); i++) {
+            currValues[i] = new HashMap <String, Integer> ((int)(instances.length / 0.75) + 1);
+        }
         System.out.println("exit constructor");
     }
 
@@ -80,65 +86,54 @@ public class StringConstrictExact
         return instances;
     }
 
-    public void constrain()
+    public int constrain()
     {
         boolean [] curr = new boolean[instances.length];
         curr[0] = true;
         
-        Set [] currValues = new Set [costs.size() - variables.size()];
-        
-        for(int i = 0; i < costs.size() - variables.size(); i++) {
-            currValues[i] = new HashSet <String> ((int)(instances.length / 0.75) + 1);
-        }
-        
-        constrainHelper(curr, 1, currValues);
+        constrainHelper(curr, 1, 0);
+        return max;
     }
     
-    public void constrainHelper(boolean [] current, int size, Set [] currValues)
-    {
-        Stack <boolean []> currInstances = new Stack();
-        ArrayList <Object []> additions = null;
+    public void constrainHelper(boolean [] current, int size, int index){
+        Stack <boolean []> currInstances = new Stack <boolean []>();
+        Stack <Integer> addedInstance = new Stack <Integer> ();
+        addCount(instances[index]);
         
-        for(int i = 1; i < instances.length; i++)
-        {
-            if(current[i]) {
-                continue;
+        if(!this.satisfiesConstraint()) {
+            if(size - 1 > max) {
+                max = size - 1;
             }
-
-            else {
-                boolean [] new_value = new boolean[instances.length];
-                System.arraycopy(current, 0, new_value, 0, instances.length);
-                new_value[i] = true;
-                
-                additions = addCount(instances[i], currValues);
-
-
-                if(!this.satisfiesConstraint(currValues)) {
-
-                    if(size > max) {
-                        max = size;
-                    }
+        }
+        
+        else 
+        {
+            for(int i = 1; i < instances.length; i++)
+            {
+                if(current[i]) {
+                    continue;
                 }
 
                 else {
+                    boolean [] new_value = new boolean[instances.length];
+                    System.arraycopy(current, 0, new_value, 0, instances.length);
+                    new_value[i] = true;
+
                     currInstances.push(new_value);
+                    addedInstance.push(i);
                 }
-            }
+            } 
         }
         
         while(!currInstances.isEmpty())
         {
-            constrainHelper(currInstances.pop(), size + 1, currValues);
+            constrainHelper(currInstances.pop(), size + 1, addedInstance.pop());
         }
         
-        for(int i = 0; i < additions.size() && additions != null; i++)
-        {
-            Object [] tmp = additions.get(i);
-            currValues[(Integer)tmp[0]].remove((String)tmp[1]);
-        }
+        removeCount(instances[index]);
     }
 
-    public boolean satisfiesConstraint(Set [] currValues) 
+    public boolean satisfiesConstraint() 
     {   
         int index = 0;
         for(Iterator <String> iter = sets.iterator(); iter.hasNext(); index++)
@@ -153,10 +148,9 @@ public class StringConstrictExact
         return true;
     }
     
-    private ArrayList <Object []> addCount(String inst, Set [] currValues)
+    private void addCount(String inst)
     {
         int index = 0;
-        ArrayList <Object []> additions = new ArrayList <Object []> ();
         for(Iterator <String> iter = sets.iterator(); iter.hasNext(); index++)
         {
             String curr_set = iter.next();
@@ -169,13 +163,40 @@ public class StringConstrictExact
                 res += inst.charAt(indices[j]);
             }
             
-            if(!currValues[index].contains(res)) {
-                currValues[index].add(res);
-                Object [] tmp = {index, res};
-                additions.add(tmp);
+            Integer prev_value = (Integer)currValues[index].get(res);
+            if(prev_value == null) {
+                currValues[index].put(res, 1);
+            }
+            else {
+                currValues[index].put(res, prev_value + 1);
             }
         }
-        return additions;
+    }
+    
+        private void removeCount(String inst)
+    {
+        int index = 0;
+        for(Iterator <String> iter = sets.iterator(); iter.hasNext(); index++)
+        {
+            String curr_set = iter.next();
+            
+            int [] indices = index_mappings.get(curr_set);
+            
+            String res = ""; 
+            for(int j = 0; j < indices.length; j++)
+            {
+                res += inst.charAt(indices[j]);
+            }
+            
+            Integer prev_value = (Integer)currValues[index].get(res);
+            
+            if(prev_value == 1) {
+                currValues[index].remove(res);
+            }
+            else {
+                currValues[index].put(res, prev_value - 1);
+            }
+        }
     }
     
     private void mapCharToIndex()
